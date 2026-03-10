@@ -1,0 +1,17 @@
+# Environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporary audio files
+temp_audio.webm
+*.wav
+*.mp3
+
+# OS generated files
+.DS_Store
+Thumbs.db

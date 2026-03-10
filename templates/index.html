@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live AI Voice Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes soundWave {
+            0%, 100% { height: 6px; opacity: 0.5; }
+            50% { height: 36px; opacity: 1; filter: drop-shadow(0 0 8px rgba(244, 63, 94, 0.8)); }
+        }
+        .wave-bar {
+            width: 6px;
+            background-color: #f43f5e;
+            border-radius: 9999px;
+            animation: soundWave 1s ease-in-out infinite;
+            transition: height 0.2s ease;
+        }
+        .wave-bar:nth-child(1) { animation-duration: 0.7s; }
+        .wave-bar:nth-child(2) { animation-duration: 1.1s; animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-duration: 0.9s; animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { animation-duration: 1.2s; animation-delay: 0.1s; }
+        .wave-bar:nth-child(5) { animation-duration: 0.8s; }
+    </style>
+</head>
+<body class="bg-slate-950 min-h-screen flex items-center justify-center font-sans text-slate-200 selection:bg-indigo-500/30">
+    
+    <div class="bg-slate-900 p-8 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md border border-slate-800 border-t-4 border-t-indigo-500 relative overflow-hidden">
+        
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+        <h1 class="text-3xl font-extrabold mb-2 text-center text-white tracking-tight">AI Voice Analyzer</h1>
+        <p class="text-center text-sm text-slate-400 mb-8 font-medium">Record live or upload an audio file. AI will transcribe it and analyze the mood.</p>
+        
+        <div id="controlsContainer" class="flex flex-col items-center relative z-10 w-full">
+            
+            <button id="recordBtn" class="w-full bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white py-3.5 px-4 rounded-xl shadow-lg shadow-red-500/25 transition-all duration-300 font-bold flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-95">
+                <span class="text-xl">🎙️</span> Start Recording
+            </button>
+            
+            <div class="flex items-center w-full my-4">
+                <hr class="flex-grow border-slate-700">
+                <span class="px-3 text-slate-500 text-xs font-bold uppercase tracking-wider">OR</span>
+                <hr class="flex-grow border-slate-700">
+            </div>
+
+            <label for="fileUpload" class="w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 py-3.5 px-4 rounded-xl shadow-lg transition-all duration-300 font-bold flex items-center justify-center gap-2 cursor-pointer transform hover:scale-[1.02] active:scale-95">
+                <span class="text-xl">📁</span> Upload Audio File
+            </label>
+            <input type="file" id="fileUpload" accept="audio/*" class="hidden">
+            
+        </div>
+
+        <div id="visualizer" class="hidden flex items-end justify-center gap-1.5 h-10 my-4 relative z-10">
+            <div class="wave-bar"></div>
+            <div class="wave-bar bg-rose-400"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar bg-rose-400"></div>
+            <div class="wave-bar"></div>
+        </div>
+
+        <button id="stopBtn" class="hidden relative z-10 w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white py-3.5 px-4 rounded-xl shadow-lg transition-all duration-300 font-bold flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-95 mt-4">
+            <span class="text-rose-500 text-xl">⏹</span> Stop & Analyze
+        </button>
+
+        <div id="loading" class="hidden mt-8 text-center text-indigo-400 font-semibold animate-pulse flex items-center justify-center gap-2">
+            <svg class="animate-spin h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="loadingText">Processing your audio...</span>
+        </div>
+
+        <div id="results" class="hidden mt-8 space-y-5 border-t border-slate-800 pt-6">
+            <div>
+                <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2 flex justify-between items-center">
+                    AI Transcription
+                    <button id="copyBtn" class="text-slate-500 hover:text-indigo-400 transition-colors cursor-pointer" title="Copy text">📋 Copy</button>
+                </h3>
+                <p id="transcriptionText" class="text-slate-200 text-lg font-medium bg-slate-950/50 p-4 rounded-xl border border-slate-800 shadow-inner leading-relaxed"></p>
+            </div>
+            <div>
+                <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">Detected Emotion</h3>
+                <div class="flex items-center gap-3 mt-2">
+                    <span id="sentimentLabel" class="px-4 py-1.5 rounded-lg text-sm font-bold shadow-sm tracking-wide"></span>
+                    <span id="sentimentScore" class="text-slate-400 text-xs font-medium"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        
+        const controlsContainer = document.getElementById('controlsContainer');
+        const recordBtn = document.getElementById('recordBtn');
+        const fileUpload = document.getElementById('fileUpload');
+        const stopBtn = document.getElementById('stopBtn');
+        const visualizer = document.getElementById('visualizer');
+        const loadingDiv = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+        const resultsDiv = document.getElementById('results');
+        const copyBtn = document.getElementById('copyBtn');
+
+        // --- 1. LIVE RECORDING LOGIC ---
+        recordBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'live_recording.webm');
+                    
+                    loadingText.textContent = "Processing your voice...";
+                    await sendDataToAI(formData);
+                };
+
+                mediaRecorder.start();
+                
+                controlsContainer.classList.add('hidden');
+                visualizer.classList.remove('hidden');
+                stopBtn.classList.remove('hidden');
+
+            } catch (err) {
+                alert("Microphone access denied or not found.");
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            
+            stopBtn.classList.add('hidden');
+            visualizer.classList.add('hidden');
+        });
+
+        // --- 2. FILE UPLOAD LOGIC ---
+        fileUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            controlsContainer.classList.add('hidden');
+            loadingText.textContent = `Analyzing ${file.name}...`;
+            
+            await sendDataToAI(formData);
+            
+            // Reset the file input so the same file can be selected again if needed
+            fileUpload.value = ''; 
+        });
+
+        // --- 3. SHARED AI PROCESSING FUNCTION ---
+        async function sendDataToAI(formData) {
+            loadingDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('transcriptionText').textContent = data.text;
+                    
+                    const labelEl = document.getElementById('sentimentLabel');
+                    labelEl.textContent = data.sentiment;
+                    
+                    if (data.sentiment === 'POSITIVE') {
+                        labelEl.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                    } else if (data.sentiment === 'NEGATIVE') {
+                        labelEl.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                    } else {
+                        labelEl.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-slate-800 text-slate-300 border border-slate-700";
+                    }
+                    
+                    document.getElementById('sentimentScore').textContent = `Confidence: ${data.confidence}%`;
+                    resultsDiv.classList.remove('hidden');
+                } else {
+                    alert("AI Error: " + data.error);
+                }
+            } catch (err) {
+                alert("Failed to connect to the AI server.");
+            } finally {
+                loadingDiv.classList.add('hidden');
+                controlsContainer.classList.remove('hidden'); // Bring buttons back
+            }
+        }
+
+        // Copy button logic
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = document.getElementById('transcriptionText').textContent;
+            navigator.clipboard.writeText(textToCopy);
+            copyBtn.textContent = "✅ Copied!";
+            setTimeout(() => copyBtn.textContent = "📋 Copy", 2000);
+        });
+    </script>
+</body>
+</html>
